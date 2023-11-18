@@ -10,6 +10,7 @@ class Contains(Symbol):
     def __init__(self, *args):
         super().__init__()
         self.prob=0.1
+        self.name = self.name.lower()
 
     def eval(self, string):
         return self.name in string
@@ -157,7 +158,7 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
         
         new_key = frozenset(it.chain(condslist, *matches))
 
-        new_value = [cond] + list(it.chain(*(cond_connection_map[match] for match in matches)))
+        new_value = list(it.chain([cond], *(cond_connection_map[match] for match in matches)))
 
         for match in matches:
             del cond_connection_map[match]

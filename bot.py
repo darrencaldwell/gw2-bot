@@ -65,7 +65,7 @@ def seconds_until_9am() -> float:
 condslist = [
     dt.Condition("Darren is never wrong, respect your old GMs", dt.Contains("darren")),
     dt.Condition("Talking about _toes_, are we. :eyes:", dt.Contains("feet") | dt.Contains("foot") | dt.Contains("toe")),
-    dt.Condition("Please refer to Tom by his proper title, Supreme High Guildmaster Tom", dt.Contains("Tom") & Not(dt.Contains("Supreme High Guildmaster Tom"))),
+    dt.Condition("Please refer to Tom by his proper title, Supreme High Guildmaster Tom", dt.Contains("tom") & Not(dt.Contains("supreme high guildmaster tom"))),
 ]
 
 tree = dt.process_conds(condslist)
