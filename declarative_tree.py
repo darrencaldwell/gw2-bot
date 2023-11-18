@@ -5,6 +5,7 @@ from sympy.logic.boolalg import simplify_logic, to_dnf, BooleanAtom
 import itertools as it
 from typing import Dict, List, Set, Optional, Union, Callable, Tuple
 from dataclasses import dataclass
+import config as cf
 
 class Contains(Symbol):
     def __init__(self, *args):
@@ -155,6 +156,12 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
     for cond in conds:
         condslist = cond.condition.free_symbols
 
+        if len(condslist) > cf.MAX_TREE_HEIGHT:
+            # if someone puts a single condition that by itself makes an illegally large tree
+            # exclude it
+            # eventually implement banning them from the server
+            continue
+
         matches = [present_symbols for present_symbols in cond_connection_map if any(symbol in present_symbols for symbol in condslist)]
         
         new_key = frozenset(it.chain(condslist, *matches))
@@ -165,7 +172,51 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
             del cond_connection_map[match]
         
         cond_connection_map[new_key] = new_value
+    
+    list_of_disjoint_groups = []
 
+    for key, grouped_conds in cond_connection_map.items():
+        newly_created_kvs: Dict[frozenset[Symbol], List[Condition]] = {}
+        
+        while len(key) > cf.MAX_TREE_HEIGHT:
+            # if we're here that means we constructed a tree that's larger than allowed
+            # that kinda sucks, because the individual components are okay
+            # so we can't just throw them away
+
+            closeness_map: Dict[int, List[Tuple[Condition, List[Condition]]]] = {}
+
+            for i, cond in enumerate(grouped_conds):
+                other_conds = grouped_conds[:i] + grouped_conds[i+1:]
+
+                closeness_sum = sum(sum(1 for j in other_cond.condition.free_symbols if j in cond.condition.free_symbols) for other_cond in other_conds)
+
+                closeness_map[closeness_sum] = closeness_map.get(closeness_sum, []) + [(cond, other_conds)]
+            
+            least_connected, other_conds = closeness_map[min(closeness_map.keys())][0]
+
+            # subtract the least connected key from the other keys
+            key = frozenset(it.chain(*(cond.condition.free_symbols for cond in other_conds)))
+            grouped_conds = other_conds 
+
+            least_connected_symbols = frozenset(least_connected.condition.free_symbols)
+            
+            add_new = True
+            
+            for key in newly_created_kvs:
+                combined_set = set(it.chain(least_connected_symbols, key))
+                
+                if len(combined_set) <= cf.MAX_TREE_HEIGHT:
+                    newly_created_kvs[combined_set] = newly_created_kvs[key] + [least_connected]
+                    del newly_created_kvs[key]
+                    add_new = False
+
+                    break
+            
+            if add_new:
+                newly_created_kvs[least_connected_symbols] = [least_connected]
+        
+        list_of_disjoint_groups.append(grouped_conds)
+        list_of_disjoint_groups += [v for v in newly_created_kvs.values()]
 
     def rec_cond_crawler(expression_list: List[Condition], lowest_cost: Optional[int] = None) -> Tuple[float, Optional[ConditionNode]]:
         if not expression_list:
@@ -202,7 +253,7 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
 
         return cheapest
     
-    val_iter = iter(cond_connection_map.values())
+    val_iter = iter(list_of_disjoint_groups)
 
     first_graph = next(val_iter, None)
 
