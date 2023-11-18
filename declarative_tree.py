@@ -2,7 +2,7 @@
 from __future__ import annotations
 from sympy import Symbol, Not, Expr, Or, And
 from sympy.logic.boolalg import simplify_logic, to_dnf, BooleanAtom
-import itertools
+import itertools as it
 from typing import Dict, List, Set, Optional, Union, Callable, Tuple
 from dataclasses import dataclass
 
@@ -106,7 +106,7 @@ def parse_expression(expression: Union[Or, And, Not, Contains], term: Union[Not,
 
 @dataclass
 class ConditionNode:
-    condition: Optional[Condition]
+    condition: Optional[Contains]
     positivenode: Optional[ConditionNode]
     negativenode: Optional[ConditionNode]
     messages: Optional[List] = None
@@ -117,12 +117,14 @@ class ConditionNode:
         
         if self.condition:
             cond_pass = self.condition.eval(string)
+        else:
+            cond_pass = False
 
-            if cond_pass and self.positivenode:
-                self.positivenode._add_messages(string, message_list)
-            
-            elif not(cond_pass) and self.negativenode:
-                self.negativenode._add_messages(string, message_list)
+        if cond_pass and self.positivenode:
+            self.positivenode._add_messages(string, message_list)
+        
+        elif not(cond_pass) and self.negativenode:
+            self.negativenode._add_messages(string, message_list)
         
     def get_messages(self, string: str) -> List[str]:
         if self.messages == None:
@@ -132,17 +134,43 @@ class ConditionNode:
         self._add_messages(string, message_list)
 
         return message_list
+    
+    def pass_down_next_graph(self, next_graph_head: ConditionNode) -> None:
+        for node_name in ("positivenode", "negativenode"):
+            if (node := getattr(self, node_name)):
+                node.pass_down_next_graph(next_graph_head)
+            else:
+                setattr(self, node_name, next_graph_head)
+
+    def __repr__(self) -> str:
+        none_or_non_none = lambda x: "None" if x == None else "Non-None"
+        return "ConditionNode(condition=" + str(self.condition) + " messages=" + str(self.messages) + " positivenode=" + none_or_non_none(self.positivenode) + " negativenode=" + none_or_non_none(self.negativenode)+")"
 
 
 def process_conds(conds: List[Condition]) -> ConditionNode:
+    cond_connection_map: Dict[frozenset[Symbol], List[Condition]] = {}
+
+    for cond in conds:
+        condslist = cond.condition.free_symbols
+
+        matches = [present_symbols for present_symbols in cond_connection_map if any(symbol in present_symbols for symbol in condslist)]
+        
+        new_key = frozenset(it.chain(condslist, *matches))
+
+        new_value = [cond] + list(it.chain(*(cond_connection_map[match] for match in matches)))
+
+        for match in matches:
+            del cond_connection_map[match]
+        
+        cond_connection_map[new_key] = new_value
+
+
     def rec_cond_crawler(expression_list: List[Condition], lowest_cost: Optional[int] = None) -> Tuple[float, Optional[ConditionNode]]:
         if not expression_list:
             return (0, ConditionNode(None, None, None))
+
+        condslist = list({free_symb for term in expression_list for free_symb in term.condition.free_symbols})
         
-        try:
-            condslist = list({free_symb for term in expression_list for free_symb in term.condition.free_symbols})
-        except:
-            breakpoint()
 
         costlist = []
 
@@ -171,9 +199,23 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
         cheapest = min(costlist, key=lambda x: x[0])
 
         return cheapest
+    
+    val_iter = iter(cond_connection_map.values())
 
-    _, ret = rec_cond_crawler(conds)
+    first_graph = next(val_iter, None)
+
+    if not first_graph:
+        return None
+
+    _, ret = rec_cond_crawler(first_graph)
     ret.messages = []
+    last_head = ret
+    
+    for independent_graph in val_iter:
+        _, additional_head = rec_cond_crawler(independent_graph)
+        additional_head.messages = []
+        last_head.pass_down_next_graph(additional_head)
+        last_head = additional_head
 
     return ret
 
