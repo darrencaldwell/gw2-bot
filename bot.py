@@ -12,6 +12,8 @@ from discord.ext import commands, tasks
 from discord.utils import get
 from dotenv import load_dotenv
 import datetime
+import declarative_tree as dt
+from sympy import Not
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -53,15 +55,22 @@ WEEKDAYS = [
 ]
 
 
-def seconds_until_9am():
+def seconds_until_9am() -> float:
     now = datetime.datetime.now()
     target = (now + datetime.timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
     diff = (target - now).total_seconds()
     print(f"{target} - {now} = {diff}")
     return diff
 
+condslist = [
+    dt.Condition("Darren is never wrong, respect your old GMs", dt.Contains("darren")),
+    dt.Condition("Talking about _toes_, are we. :eyes:", dt.Contains("feet") | dt.Contains("foot") | dt.Contains("toes") | dt.Contains("toe")),
+    dt.Condition("Please refer to Tom by his proper title, Supreme High Guildmaster Tom", dt.Contains("Tom") & Not(dt.Contains("Supreme High Guildmaster Tom"))),
+]
 
-def build_message(role):
+tree = dt.process_conds(condslist)
+
+def build_message(role) -> str:
     intro = (f"{role.mention} Good morning members I hope you have a good "
              f"{WEEKDAYS[datetime.date.today().weekday()]}.\n"
              f"Please react to the relevant emotes for today's adventures!\n\n")
@@ -71,7 +80,6 @@ def build_message(role):
         reacts += f"{emoji} : {EMOJI_MAP.get(emoji)}\n"
 
     return intro + reacts
-
 
 class MyClient(discord.Client):
     async def on_ready(self):
@@ -85,9 +93,12 @@ class MyClient(discord.Client):
     async def on_message(self, message):
         if message.author == client.user:
             return
-        if "darren" in message.content.lower():
-            channel = message.channel
-            await channel.send('Darren is never wrong, respect your old GMs.')
+        content = message.content.lower()
+        channel = message.channel
+
+        messages = tree.get_messages(content)
+        for response in messages:
+            await channel.send(response)
 
 
 class MyCog(commands.Cog):
