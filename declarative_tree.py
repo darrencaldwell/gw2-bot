@@ -218,19 +218,3 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
         last_head = additional_head
 
     return ret
-
-
-if __name__ == "__main__":
-    subcond1 = Contains("darren")
-    subcond2 = Contains("piss")
-    subcond3 = Contains("caithe")
-    subcond4 = Contains("werewolf")
-    subcond5 = Contains("bees")
-
-    cond1 = Condition("caithe", (subcond1 | subcond2) & subcond3)
-    cond2 = Condition("werewolf", (subcond1 | subcond2) & subcond4)
-    cond3 = Condition("bees", (subcond1 | subcond2) & subcond5)
-
-    tree = process_conds([cond1, cond2, cond3])
-
-    tree.get_messages("darren caithe")
