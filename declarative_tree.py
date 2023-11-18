@@ -203,7 +203,7 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
             add_new = True
             
             for key in newly_created_kvs:
-                combined_set = set(it.chain(least_connected_symbols, key))
+                combined_set = frozenset(it.chain(least_connected_symbols, key))
                 
                 if len(combined_set) <= cf.MAX_TREE_HEIGHT:
                     newly_created_kvs[combined_set] = newly_created_kvs[key] + [least_connected]
