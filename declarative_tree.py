@@ -132,6 +132,7 @@ class ConditionNode:
             raise RuntimeError("Improperly constructed tree, node has messages = None")
         
         message_list = []
+        string = string.lower()
         self._add_messages(string, message_list)
 
         return message_list
