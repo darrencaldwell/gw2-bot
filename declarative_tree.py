@@ -7,6 +7,8 @@ from typing import Dict, List, Set, Optional, Union, Callable, Tuple
 from dataclasses import dataclass
 import config as cf
 import graphviz as gz
+import discord as ds
+from random import randint
 
 class Contains(Symbol):
     def __init__(self, *args):
@@ -14,14 +16,49 @@ class Contains(Symbol):
         self.prob=0.1
         self.name = self.name.lower()
 
-    def eval(self, string):
-        return self.name in string
+    def eval(self, _message: ds.Message, content: str):
+        return self.name in content
     
     def __repr__(self):
         return self.__str__()
 
     def __str__(self):
         return "Contains: " + super().__repr__()
+
+class AuthoredBy(Symbol):
+    def __init__(self, *args):
+        super().__init__()
+        self.prob=0.1
+        self.name = self.name
+
+    def eval(self, message: ds.Message, _content: str):
+        return self.name == message.author.name
+    
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "Authored by: " + super().__repr__()
+
+class OneIn(Symbol):
+    def __init__(self, *args):
+        super().__init__()
+        self.prob=0.1
+        try:
+            self.die_size = int(self.name)
+        except:
+            raise TypeError("Die size must be an int")
+        
+        self.name = self.name + " id:" + str(id(self))
+
+    def eval(self, _message: ds.Message, _content: str):
+        return randint(1, self.die_size) == 1
+    
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "1 in : " + str(self.die_size) + " chance"
 
 @dataclass
 class Condition:
@@ -108,34 +145,67 @@ def parse_expression(expression: Union[Or, And, Not, Contains], term: Union[Not,
             return False
 
 @dataclass
+class TerminalNode:
+    node: Optional[ConditionNode]
+    messages: Optional[List[str]]
+
+    def _add_messages(self, string: str, message_list: List) -> None:
+        for message in self.messages:
+            message_list.append(message)
+        
+        self.node._add_messages(string, message_list)
+    
+    def pass_down_next_graph(self, next_graph_head: ConditionNode):
+        if self.node:
+            self.node.pass_down_next_graph(next_graph_head)
+        else:
+            self.node = next_graph_head
+    
+    def _get_graph(self, graph: gz.Digraph):
+        label_terms = []
+
+        if self.messages:
+            label_terms.append("Messages: " + ", ".join(self.messages))
+        
+        graph.node(str(id(self)), "\n".join(label_terms))
+
+        strid = str(id(self))
+
+        if self.node:
+            node_id = self.node._get_graph(graph)
+            graph.edge(strid, node_id)
+        
+        return strid
+
+@dataclass
 class ConditionNode:
     condition: Optional[Contains]
     positivenode: Optional[ConditionNode]
     negativenode: Optional[ConditionNode]
     messages: Optional[List[str]] = None
 
-    def _add_messages(self, string: str, message_list: List) -> None:
-        for message in self.messages:
-            message_list.append(message)
+    def _add_messages(self, message: ds.Message, content: str, message_list: List) -> None:
+        for reply in self.messages:
+            message_list.append(reply)
         
         if self.condition:
-            cond_pass = self.condition.eval(string)
+            cond_pass = self.condition.eval(message, content)
         else:
             cond_pass = False
 
         if cond_pass and self.positivenode:
-            self.positivenode._add_messages(string, message_list)
+            self.positivenode._add_messages(message, content, message_list)
         
         elif not(cond_pass) and self.negativenode:
-            self.negativenode._add_messages(string, message_list)
+            self.negativenode._add_messages(message, content, message_list)
         
-    def get_messages(self, string: str) -> List[str]:
+    def get_messages(self, message: ds.Message) -> List[str]:
         if self.messages == None:
             raise RuntimeError("Improperly constructed tree, node has messages = None")
         
         message_list = []
-        string = string.lower()
-        self._add_messages(string, message_list)
+        content = message.content.lower()
+        self._add_messages(message, content, message_list)
 
         return message_list
 
@@ -154,7 +224,7 @@ class ConditionNode:
             label_terms.append("Messages: " + ", ".join(self.messages))
 
         if self.condition:
-            label_terms.append("Condition: " + self.condition.name)
+            label_terms.append("Condition: " + str(self.condition))
         
         graph.node(str(id(self)), "\n".join(label_terms))
 
@@ -174,6 +244,9 @@ class ConditionNode:
     def pass_down_next_graph(self, next_graph_head: ConditionNode) -> None:
         for node_name in ("positivenode", "negativenode"):
             if (node := getattr(self, node_name)):
+                if isinstance(node, TerminalNode) and not(node.messages):
+                    setattr(self, node_name, next_graph_head)
+
                 node.pass_down_next_graph(next_graph_head)
             else:
                 setattr(self, node_name, next_graph_head)
@@ -254,7 +327,7 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
 
     def rec_cond_crawler(expression_list: List[Condition], lowest_cost: Optional[int] = None) -> Tuple[float, Optional[ConditionNode]]:
         if not expression_list:
-            return (0, ConditionNode(None, None, None))
+            return (0, TerminalNode(None, None))
 
         condslist = list({free_symb for term in expression_list for free_symb in term.condition.free_symbols})
 

@@ -96,7 +96,7 @@ class MyClient(discord.Client):
         content = message.content.lower()
         channel = message.channel
 
-        messages = tree.get_messages(content)
+        messages = tree.get_messages(message, content)
         for response in messages:
             await channel.send(response)
 
@@ -122,9 +122,15 @@ class MyCog(commands.Cog):
         for react in EMOJI_MAP.keys():
             await message.add_reaction(react)
 
-
 intents = discord.Intents.default()
 intents.message_content = True
+
+bot = commands.Bot(command_prefix="/", intents=intents)
+
+@bot.command(name="addmessage")
+async def addmessage(ctx, *args):
+    args = "".join(args)
+    
 
 client = MyClient(intents=intents)
 client.run(TOKEN)
