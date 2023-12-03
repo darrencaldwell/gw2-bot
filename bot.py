@@ -67,7 +67,6 @@ WEEKDAYS = [
 
 adjust_prob_by = cf.DAILY_INVOCATIONS // 24
 
-
 def seconds_until_9am() -> float:
     now = datetime.datetime.now()
     target = (now + datetime.timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
@@ -75,6 +74,11 @@ def seconds_until_9am() -> float:
     print(f"{target} - {now} = {diff}")
     return diff
 
+condslist = [
+    dt.Condition("Darren is never wrong, respect your old GMs", dt.Contains("darren")),
+    dt.Condition("Talking about _toes_, are we. :eyes:", dt.Contains("feet") | dt.Contains("foot") | dt.Contains("toe")),
+    dt.Condition("Please refer to Tom by his proper title, Supreme High Guildmaster Tom", dt.Contains("tom") & Not(dt.Contains("supreme high guildmaster tom"))),
+]
 
 def parse_cond_line(line: List[str]) -> dt.Condition:
     print(line)
