@@ -18,8 +18,8 @@ class ExprParser(lrparsing.Grammar):
         string = Token(re="\"(.*?)\"")
 
     expr = Ref("expr")
-    onein = Keyword("OneIn") + T.integer
-    contains = Keyword("Contains") + T.string
+    onein = Keyword("onein") + (T.integer | (":" + T.integer))
+    contains = Keyword("contains") + (T.string | (":" + T.string))
 
     condition = onein | contains
     
@@ -40,11 +40,14 @@ class ExprParser(lrparsing.Grammar):
 
 def rec_symp_crawler(tup: Tuple) -> Condition:
     match tup[0].name:
+        
         case "onein":
-            return OneIn(tup[2][1])
+            ret = tup[2][1] if tup[2][1] != ":" else tup[3][1]
+            return OneIn(ret)
         
         case "contains":
-            string = tup[2][1][1:-1]
+            string = tup[2][1] if tup[2][1] != ":" else tup[3][1]
+            string = string[1:-1]
             return Contains(string)
         
         case "or_list":
@@ -63,3 +66,10 @@ def rec_symp_crawler(tup: Tuple) -> Condition:
 def parse_string(string: str) -> Condition:
     parse_tree = ExprParser.parse(string)
     return rec_symp_crawler(parse_tree)
+
+if __name__=="__main__":
+    test = ExprParser.parse("contains: \"foo\" & contains \"bar\" & contains \"Darren\" & ~contains \"Fish\"")
+    bar = rec_symp_crawler(test)
+
+    foo = ExprParser.parse('contains: "darren"')
+    breakpoint()

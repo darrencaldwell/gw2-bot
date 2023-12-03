@@ -10,6 +10,28 @@ import graphviz as gz
 import discord as ds
 from random import randint
 
+AUTHOR_DICT = {}
+
+class AlwaysLarger:
+    def __gt__(self, other):
+        if type(other) in (int, float):
+            return True
+        else:
+            return NotImplemented
+    
+    def __lt__(self, other):
+        if type(other) in (int, float):
+            return False
+        else:
+            return NotImplemented
+    
+    def __add__(self, other):
+        if type(other) in (int, float, AlwaysLarger):
+            return AlwaysLarger()
+
+        else:
+            return NotImplemented
+
 class Contains(Symbol):
     def __init__(self, *args):
         super().__init__()
@@ -23,7 +45,7 @@ class Contains(Symbol):
         return self.__str__()
 
     def __str__(self):
-        return "Contains: " + super().__repr__()
+        return "Contains: \"" + self.name + "\""
 
 class AuthoredBy(Symbol):
     def __init__(self, *args):
@@ -38,7 +60,7 @@ class AuthoredBy(Symbol):
         return self.__str__()
 
     def __str__(self):
-        return "Authored by: " + super().__repr__()
+        return "AuthoredBy: \"" + self.name + "\""
 
 class OneIn(Symbol):
     def __init__(self, *args):
@@ -58,7 +80,31 @@ class OneIn(Symbol):
         return self.__str__()
 
     def __str__(self):
-        return "1 in : " + str(self.die_size) + " chance"
+        return "OneIn: " + str(self.die_size)
+
+class AuthorRateLimit(Symbol):
+    def __init__(self, *args):
+        super().__init__()
+
+        self.prob = 0.9
+        self.author_name = self.name
+        self.name = self.name + " id:" + str(id(self)) 
+        
+        if self.author_name not in AUTHOR_DICT:
+            AUTHOR_DICT[self.author_name] = 0
+    
+    def eval(self, _message: ds.Message, _content: str):
+        respond = randint(1, cf.DAILY_INVOCATIONS) > AUTHOR_DICT[self.author_name]
+        if respond:
+            AUTHOR_DICT[self.author_name] += 1
+        
+        return respond 
+    
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "AuthorRateLimit: \"" + self.author_name + "\""
 
 @dataclass
 class Condition:
@@ -149,11 +195,12 @@ class TerminalNode:
     node: Optional[ConditionNode]
     messages: Optional[List[str]]
 
-    def _add_messages(self, string: str, message_list: List) -> None:
+    def _add_messages(self, message: ds.Message, content: str, message_list: List) -> None:
         for message in self.messages:
             message_list.append(message)
         
-        self.node._add_messages(string, message_list)
+        if self.node:
+            self.node._add_messages(message, content, message_list)
     
     def pass_down_next_graph(self, next_graph_head: ConditionNode):
         if self.node:
@@ -214,7 +261,6 @@ class ConditionNode:
         self._get_graph(graph)
         graph.unflatten(4)
         graph.render("out")
-        breakpoint()
         pass
 
     def _get_graph(self, graph: gz.Digraph):
@@ -350,6 +396,12 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
             
             if false_path:
                 false_path.messages = [expr.message for expr in expression_list_neg if expr.condition == True] if false_path else None
+            
+            # we always want AuthorRateLimit to be right above the message, 
+            # so we don't increment the count on messages we aren't actually going to post
+            # to do this, we essentially give these arrangements infinite cost
+            if isinstance(cond, AuthorRateLimit) and not true_path.messages:
+                cost = AlwaysLarger()
 
             path_obj = ConditionNode(cond, true_path, false_path)
 
@@ -377,3 +429,5 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
         last_head = additional_head
 
     return ret
+
+
