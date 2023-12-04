@@ -68,6 +68,8 @@ class AuthoredBy(Symbol):
         self.name = self.name
 
     def eval(self, message: ds.Message, _content: str):
+        print(self)
+        print(message)
         return self.name == message.author.name
     
     def __repr__(self):
@@ -96,33 +98,26 @@ class OneIn(Symbol):
     def __str__(self):
         return "OneIn: " + str(self.die_size)
 
-class AuthorRateLimit(Symbol):
-    def __init__(self, *args):
-        super().__init__()
+@dataclass
+class Response:
+    message: str
+    author: str
 
-        self.prob = 0.9
-        self.author_name = self.name
-        self.name = self.name + " id:" + str(id(self)) 
-        
-        if self.author_name not in AUTHOR_DICT:
-            AUTHOR_DICT[self.author_name] = cf.DAILY_INVOCATIONS // 2
-    
-    def eval(self, _message: ds.Message, _content: str):
-        respond = randint(1, cf.DAILY_INVOCATIONS) > AUTHOR_DICT[self.author_name]
+    def __post_init__(self):
+        if self.author not in AUTHOR_DICT:
+            AUTHOR_DICT[self.author] = cf.DAILY_INVOCATIONS // 4
+
+    def check_respond(self) -> Optional[str]:
+        respond = randint(1, cf.DAILY_INVOCATIONS) > AUTHOR_DICT[self.author]
         if respond:
-            AUTHOR_DICT[self.author_name] += 1
+            AUTHOR_DICT[self.author] += 1
+            return self.message
         
-        return respond 
-    
-    def __repr__(self):
-        return self.__str__()
-
-    def __str__(self):
-        return "AuthorRateLimit: \"" + self.author_name + "\""
+        return None
 
 @dataclass
 class Condition:
-    message: str
+    message: Response
     condition: Expr
 
     def __post_init__(self):
@@ -207,11 +202,10 @@ def parse_expression(expression: Union[Or, And, Not, Contains], term: Union[Not,
 @dataclass
 class TerminalNode:
     node: Optional[ConditionNode]
-    messages: Optional[List[str]]
+    messages: Optional[List[Response]]
 
     def _add_messages(self, message: ds.Message, content: str, message_list: List) -> None:
-        for message in self.messages:
-            message_list.append(message)
+        message_list += [reply for message in self.messages if (reply := message.check_respond())]
         
         if self.node:
             self.node._add_messages(message, content, message_list)
@@ -226,7 +220,7 @@ class TerminalNode:
         label_terms = []
 
         if self.messages:
-            label_terms.append("Messages: " + ", ".join(self.messages))
+            label_terms.append("Messages: " + ", ".join(message.message for message in self.messages))
         
         graph.node(str(id(self)), "\n".join(label_terms))
 
@@ -243,21 +237,21 @@ class ConditionNode:
     condition: Optional[Contains]
     positivenode: Optional[ConditionNode]
     negativenode: Optional[ConditionNode]
-    messages: Optional[List[str]] = None
+    messages: Optional[List[Response]] = None
 
     def _add_messages(self, message: ds.Message, content: str, message_list: List) -> None:
-        for reply in self.messages:
-            message_list.append(reply)
-        
+        message_list += [reply for message in self.messages if (reply := message.check_respond())]
+        print(message_list)
+
         if self.condition:
             cond_pass = self.condition.eval(message, content)
         else:
             cond_pass = False
 
-        if cond_pass and self.positivenode:
+        if cond_pass:
             self.positivenode._add_messages(message, content, message_list)
         
-        elif not(cond_pass) and self.negativenode:
+        elif not(cond_pass):
             self.negativenode._add_messages(message, content, message_list)
         
     def get_messages(self, message: ds.Message) -> List[str]:
@@ -274,14 +268,14 @@ class ConditionNode:
         graph = gz.Digraph(strict=True, format="jpeg")
         self._get_graph(graph)
         graph.unflatten(4)
-        graph.render("out")
+        graph.render("/tmp/out")
         pass
 
     def _get_graph(self, graph: gz.Digraph):
         label_terms = []
 
         if self.messages:
-            label_terms.append("Messages: " + ", ".join(self.messages))
+            label_terms.append("Messages: " + ", ".join(message.message for message in self.messages))
 
         if self.condition:
             label_terms.append("Condition: " + str(self.condition))
@@ -424,12 +418,6 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
             
             if false_path:
                 false_path.messages = [expr.message for expr in expression_list_neg if expr.condition == True] if false_path else None
-            
-            # we always want AuthorRateLimit to be right above the message, 
-            # so we don't increment the count on messages we aren't actually going to post
-            # to do this, we essentially give these arrangements infinite cost
-            if isinstance(cond, AuthorRateLimit) and not true_path.messages:
-                cost = AlwaysLarger()
 
             path_obj = ConditionNode(cond, true_path, false_path)
 

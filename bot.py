@@ -34,9 +34,9 @@ ROLE_ID = 1168850068665794661
 GUILD_ID = 1099793030678069338
 
 #OSCAR TESTING
-CHANNEL_ID = 723899751732346964
-ROLE_ID = 1180661716107931658
-GUILD_ID = 723899751732346960
+# CHANNEL_ID = 723899751732346964
+# ROLE_ID = 1180661716107931658
+# GUILD_ID = 723899751732346960
 
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -74,16 +74,9 @@ def seconds_until_9am() -> float:
     print(f"{target} - {now} = {diff}")
     return diff
 
-condslist = [
-    dt.Condition("Darren is never wrong, respect your old GMs", dt.Contains("darren")),
-    dt.Condition("Talking about _toes_, are we. :eyes:", dt.Contains("feet") | dt.Contains("foot") | dt.Contains("toe")),
-    dt.Condition("Please refer to Tom by his proper title, Supreme High Guildmaster Tom", dt.Contains("tom") & Not(dt.Contains("supreme high guildmaster tom"))),
-]
-
 def parse_cond_line(line: List[str]) -> dt.Condition:
-    print(line)
     try:
-        cond = dt.Condition(condition = parse_string(line[1]) & dt.AuthorRateLimit(line[2]), message = line[0])
+        cond = dt.Condition(condition = parse_string(line[1]), message = dt.Response(message = line[0], author = line[2]))
     except Exception as e:
         print("Failed to load line " + str(line) + " " + str(e))
         return None
@@ -190,7 +183,7 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
         print("Adding: " + str(condition) + " from " + interaction.user.name)
         csvwriter.writerow([response, condition, interaction.user.name])
 
-    parsed_condition = parsed_condition & dt.AuthorRateLimit(interaction.user.name)
+    resp_obj = dt.Response(message=response, author=interaction.user.name)
 
     condslist.append(dt.Condition(response, parsed_condition))
     tree = dt.process_conds(condslist)
@@ -201,5 +194,14 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
 async def tutorial_island(interaction: discord.Interaction):
     await interaction.response.send_message(tutorial_text, ephemeral=True)
 
+@client.tree.command()
+async def gen_graph(interaction: discord.Interaction):
+    """Gives you the current response tree state"""
+
+    tree.get_graph()
+
+    file = discord.File("/tmp/out.jpeg")
+
+    await interaction.response.send_message(file=file)
 
 client.run(TOKEN)
