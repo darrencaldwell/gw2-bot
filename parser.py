@@ -2,7 +2,7 @@ import sys
 
 import lrparsing
 from lrparsing import Keyword, List, Prio, Ref, THIS, Token, Tokens
-from declarative_tree import Contains, OneIn, Condition
+from declarative_tree import Contains, OneIn, Condition, AuthoredBy
 from sympy import Or, And, Not
 
 from typing import Tuple
@@ -20,8 +20,9 @@ class ExprParser(lrparsing.Grammar):
     expr = Ref("expr")
     onein = Keyword("onein") + (T.integer | (":" + T.integer))
     contains = Keyword("contains") + (T.string | (":" + T.string))
+    authoredby = Keyword("authoredby") + (T.string | (":" + T.string))
 
-    condition = onein | contains
+    condition = onein | contains | authoredby
     
     or_list = List(expr, "|", min=2)
     and_list = List(expr, "&", min=2)
@@ -49,6 +50,11 @@ def rec_symp_crawler(tup: Tuple) -> Condition:
             string = tup[2][1] if tup[2][1] != ":" else tup[3][1]
             string = string[1:-1]
             return Contains(string)
+        
+        case "authoredby":
+            string = tup[2][1] if tup[2][1] != ":" else tup[3][1]
+            string = string[1:-1]
+            return AuthoredBy(string)
         
         case "or_list":
             return Or(*(rec_symp_crawler(i) for i in tup[1:] if not i[0].name == "'|'"))

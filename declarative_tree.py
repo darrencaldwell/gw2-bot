@@ -32,6 +32,20 @@ class AlwaysLarger:
         else:
             return NotImplemented
 
+# I imagine adding new conditions is most of what people are gonna want to do
+# thankfully, it's very easy
+# you don't need to understand any of the logic stuff
+# your condition must:
+# - subclass sympy.Symbol
+# - have a prob attribute, that should correspond to the rough 
+#   expected chance the condition is met (this is used to optimise the tree)
+# - have an eval method like the ones on the classes below, that takes a 
+#   ds.Message object as argument 1, the lowercase string of that message's content as argument 2, and returns True or False
+
+# One extra detail. The logic eliminates identical conditions - which we want it to! No sense checking the same thing twice
+# However, sometimes you don't want this behaviour. The best example is probably OneIn - one 1 in 6 chance passing does not imply
+# other 1-in-6 chances should also pass. To get around this, we just append the object ID to its name. 
+
 class Contains(Symbol):
     def __init__(self, *args):
         super().__init__()
@@ -305,6 +319,16 @@ class ConditionNode:
 def process_conds(conds: List[Condition]) -> ConditionNode:
     cond_connection_map: Dict[frozenset[Symbol], List[Condition]] = {}
 
+    # sympy can only handle at most 8 unique symbols in an equation, because their simplifying
+    # method scales hard with that
+    # this gets around that by essentially splitting the tree into subtrees
+
+    # if two sets of symbols are completely disconnected, they'll always just be put into separate trees
+    # because that just makes the tree smaller and simpler
+
+    # if a valid network of interconnected symbols has more than 8 components
+    # things get complicated
+    # we find the least bad way to split the set, repeating the fewest possible number of elements
     for cond in conds:
         condslist = cond.condition.free_symbols
 
@@ -371,10 +395,14 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
         list_of_disjoint_groups.append(grouped_conds)
         list_of_disjoint_groups += [v for v in newly_created_kvs.values()]
 
+    # this function is the heart of tree construction
     def rec_cond_crawler(expression_list: List[Condition], lowest_cost: Optional[int] = None) -> Tuple[float, Optional[ConditionNode]]:
+        # if you're here, it means there are no more conditions to try and meet. Make a terminal node
         if not expression_list:
             return (0, TerminalNode(None, None))
 
+        # this is a list of every unique symbol at this layer
+        # symbols are the atoms of the logic here - does a string contain a given word, etc. etc.
         condslist = list({free_symb for term in expression_list for free_symb in term.condition.free_symbols})
 
         costlist = []
@@ -418,9 +446,13 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
     if not first_graph:
         return None
 
+    # construct the tree for the first independent network
     _, ret = rec_cond_crawler(first_graph)
     ret.messages = []
     last_head = ret
+
+    # for each additional tree, create it attached to the tree before it
+    # to make a treetree
     
     for independent_graph in val_iter:
         _, additional_head = rec_cond_crawler(independent_graph)

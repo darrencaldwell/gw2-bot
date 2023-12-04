@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 import datetime
 import declarative_tree as dt
 from sympy import Not
-from example_parser import parse_string
+from parser import parse_string
 import config as cf
 import csv
 from typing import List
@@ -168,16 +168,23 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 
 client = MyClient(intents=intents)
 
+with open("tutorial.md", "r") as f:
+    tutorial_text =  f.read()
+
 @client.tree.command()
 async def new_response(interaction: discord.Interaction, response: str, condition: str):
-    """Adds a new message, and a Boolean condition that causes it to be posted"""
+    """Adds a new message, and a Boolean condition that causes it to be posted. Example: contains: \"foo\" & onein: 3"""
     global tree
+
+    condition = condition.lower()
+
+    parse_string(condition)
     
     try:
         parsed_condition = parse_string(condition)
     
     except Exception as e:
-        await interaction.response.send_message("Couldn't parse condition: " + str(e))
+        await interaction.response.send_message(tutorial_text, ephemeral=True)
         return
     
     with open(cf.RESPONSE_FILENAME, "a") as f:
@@ -191,6 +198,10 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
     tree = dt.process_conds(condslist)
     
     await interaction.response.send_message("All good :) ")
+
+@client.tree.command()
+async def tutorial_island(interaction: discord.Interaction):
+    await interaction.response.send_message(tutorial_text, ephemeral=True)
 
 
 client.run(TOKEN)
