@@ -34,9 +34,9 @@ ROLE_ID = 1168850068665794661
 GUILD_ID = 1099793030678069338
 
 #OSCAR TESTING
-# CHANNEL_ID = 723899751732346964
-# ROLE_ID = 1180661716107931658
-# GUILD_ID = 723899751732346960
+CHANNEL_ID = 723899751732346964
+ROLE_ID = 1180661716107931658
+GUILD_ID = 723899751732346960
 
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -178,8 +178,6 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
 
     condition = condition.lower()
 
-    parse_string(condition)
-    
     try:
         parsed_condition = parse_string(condition)
     
