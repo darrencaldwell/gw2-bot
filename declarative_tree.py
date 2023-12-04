@@ -12,26 +12,6 @@ from random import randint
 
 AUTHOR_DICT = {}
 
-class AlwaysLarger:
-    def __gt__(self, other):
-        if type(other) in (int, float):
-            return True
-        else:
-            return NotImplemented
-    
-    def __lt__(self, other):
-        if type(other) in (int, float):
-            return False
-        else:
-            return NotImplemented
-    
-    def __add__(self, other):
-        if type(other) in (int, float, AlwaysLarger):
-            return AlwaysLarger()
-
-        else:
-            return NotImplemented
-
 # I imagine adding new conditions is most of what people are gonna want to do
 # thankfully, it's very easy
 # you don't need to understand any of the logic stuff
