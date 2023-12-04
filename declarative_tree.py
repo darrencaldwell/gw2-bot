@@ -105,7 +105,7 @@ class AuthorRateLimit(Symbol):
         self.name = self.name + " id:" + str(id(self)) 
         
         if self.author_name not in AUTHOR_DICT:
-            AUTHOR_DICT[self.author_name] = 0
+            AUTHOR_DICT[self.author_name] = cf.DAILY_INVOCATIONS // 2
     
     def eval(self, _message: ds.Message, _content: str):
         respond = randint(1, cf.DAILY_INVOCATIONS) > AUTHOR_DICT[self.author_name]
