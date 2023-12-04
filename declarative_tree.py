@@ -48,8 +48,6 @@ class AuthoredBy(Symbol):
         self.name = self.name
 
     def eval(self, message: ds.Message, _content: str):
-        print(self)
-        print(message)
         return self.name == message.author.name
     
     def __repr__(self):
@@ -221,7 +219,6 @@ class ConditionNode:
 
     def _add_messages(self, message: ds.Message, content: str, message_list: List) -> None:
         message_list += [reply for message in self.messages if (reply := message.check_respond())]
-        print(message_list)
 
         if self.condition:
             cond_pass = self.condition.eval(message, content)
