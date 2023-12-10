@@ -135,9 +135,11 @@ class MyCog(commands.Cog):
         self.channel = channel
         self.role = role
         self.my_task.start()
+        self.adjust_probs.start()
 
     def cog_unxload(self):
         self.my_task.cancel()
+        self.adjust_probs.cancel()
 
     @tasks.loop(seconds=10)
     async def my_task(self):
@@ -185,7 +187,7 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
 
     resp_obj = dt.Response(message=response, author=interaction.user.name)
 
-    condslist.append(dt.Condition(response, parsed_condition))
+    condslist.append(dt.Condition(resp_obj, parsed_condition))
     tree = dt.process_conds(condslist)
     
     await interaction.response.send_message("All good :) ")

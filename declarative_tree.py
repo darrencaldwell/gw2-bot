@@ -57,15 +57,19 @@ class AuthoredBy(Symbol):
         return "AuthoredBy: \"" + self.name + "\""
 
 class OneIn(Symbol):
+    def __new__(cls, name, **assumptions):
+        return cls.__xnew__(cls, name, **assumptions)
+
     def __init__(self, *args):
-        super().__init__()
-        self.prob=0.1
         try:
             self.die_size = int(self.name)
         except:
             raise TypeError("Die size must be an int")
+
+        self.name = (self.name + " id:" + str(id(self)))
+        self.prob = 1 / self.die_size
         
-        self.name = self.name + " id:" + str(id(self))
+        super().__init__()
 
     def eval(self, _message: ds.Message, _content: str):
         return randint(1, self.die_size) == 1
