@@ -6,6 +6,25 @@ import itertools as it
 from typing import Dict, List, Set, Optional, Union, Callable, Tuple
 from dataclasses import dataclass
 import config as cf
+import graphviz as gz
+import discord as ds
+from random import randint
+
+AUTHOR_DICT = {}
+
+# I imagine adding new conditions is most of what people are gonna want to do
+# thankfully, it's very easy
+# you don't need to understand any of the logic stuff
+# your condition must:
+# - subclass sympy.Symbol
+# - have a prob attribute, that should correspond to the rough 
+#   expected chance the condition is met (this is used to optimise the tree)
+# - have an eval method like the ones on the classes below, that takes a 
+#   ds.Message object as argument 1, the lowercase string of that message's content as argument 2, and returns True or False
+
+# One extra detail. The logic eliminates identical conditions - which we want it to! No sense checking the same thing twice
+# However, sometimes you don't want this behaviour. The best example is probably OneIn - one 1 in 6 chance passing does not imply
+# other 1-in-6 chances should also pass. To get around this, we just append the object ID to its name. 
 
 class Contains(Symbol):
     def __init__(self, *args):
@@ -13,18 +32,70 @@ class Contains(Symbol):
         self.prob=0.1
         self.name = self.name.lower()
 
-    def eval(self, string):
-        return self.name in string
+    def eval(self, _message: ds.Message, content: str):
+        return self.name in content
     
     def __repr__(self):
         return self.__str__()
 
     def __str__(self):
-        return "Contains: " + super().__repr__()
+        return "Contains: \"" + self.name + "\""
+
+class AuthoredBy(Symbol):
+    def __init__(self, *args):
+        super().__init__()
+        self.prob=0.1
+        self.name = self.name
+
+    def eval(self, message: ds.Message, _content: str):
+        return self.name == message.author.name
+    
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "AuthoredBy: \"" + self.name + "\""
+
+class OneIn(Symbol):
+    def __init__(self, *args):
+        super().__init__()
+        self.prob=0.1
+        try:
+            self.die_size = int(self.name)
+        except:
+            raise TypeError("Die size must be an int")
+        
+        self.name = self.name + " id:" + str(id(self))
+
+    def eval(self, _message: ds.Message, _content: str):
+        return randint(1, self.die_size) == 1
+    
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "OneIn: " + str(self.die_size)
+
+@dataclass
+class Response:
+    message: str
+    author: str
+
+    def __post_init__(self):
+        if self.author not in AUTHOR_DICT:
+            AUTHOR_DICT[self.author] = cf.DAILY_INVOCATIONS // 4
+
+    def check_respond(self) -> Optional[str]:
+        respond = randint(1, cf.DAILY_INVOCATIONS) > AUTHOR_DICT[self.author]
+        if respond:
+            AUTHOR_DICT[self.author] += 1
+            return self.message
+        
+        return None
 
 @dataclass
 class Condition:
-    message: str
+    message: Response
     condition: Expr
 
     def __post_init__(self):
@@ -107,40 +178,106 @@ def parse_expression(expression: Union[Or, And, Not, Contains], term: Union[Not,
             return False
 
 @dataclass
+class TerminalNode:
+    node: Optional[ConditionNode]
+    messages: Optional[List[Response]]
+
+    def _add_messages(self, message: ds.Message, content: str, message_list: List) -> None:
+        message_list += [reply for message in self.messages if (reply := message.check_respond())]
+        
+        if self.node:
+            self.node._add_messages(message, content, message_list)
+    
+    def pass_down_next_graph(self, next_graph_head: ConditionNode):
+        if self.node:
+            self.node.pass_down_next_graph(next_graph_head)
+        else:
+            self.node = next_graph_head
+    
+    def _get_graph(self, graph: gz.Digraph):
+        label_terms = []
+
+        if self.messages:
+            label_terms.append("Messages: " + ", ".join(message.message for message in self.messages))
+        
+        graph.node(str(id(self)), "\n".join(label_terms))
+
+        strid = str(id(self))
+
+        if self.node:
+            node_id = self.node._get_graph(graph)
+            graph.edge(strid, node_id)
+        
+        return strid
+
+@dataclass
 class ConditionNode:
     condition: Optional[Contains]
     positivenode: Optional[ConditionNode]
     negativenode: Optional[ConditionNode]
-    messages: Optional[List] = None
+    messages: Optional[List[Response]] = None
 
-    def _add_messages(self, string: str, message_list: List) -> None:
-        for message in self.messages:
-            message_list.append(message)
-        
+    def _add_messages(self, message: ds.Message, content: str, message_list: List) -> None:
+        message_list += [reply for message in self.messages if (reply := message.check_respond())]
+
         if self.condition:
-            cond_pass = self.condition.eval(string)
+            cond_pass = self.condition.eval(message, content)
         else:
             cond_pass = False
 
-        if cond_pass and self.positivenode:
-            self.positivenode._add_messages(string, message_list)
+        if cond_pass:
+            self.positivenode._add_messages(message, content, message_list)
         
-        elif not(cond_pass) and self.negativenode:
-            self.negativenode._add_messages(string, message_list)
+        elif not(cond_pass):
+            self.negativenode._add_messages(message, content, message_list)
         
-    def get_messages(self, string: str) -> List[str]:
+    def get_messages(self, message: ds.Message) -> List[str]:
         if self.messages == None:
             raise RuntimeError("Improperly constructed tree, node has messages = None")
         
         message_list = []
-        string = string.lower()
-        self._add_messages(string, message_list)
+        content = message.content.lower()
+        self._add_messages(message, content, message_list)
 
         return message_list
+
+    def get_graph(self):
+        graph = gz.Digraph(strict=True, format="jpeg")
+        self._get_graph(graph)
+        graph.unflatten(4)
+        graph.render("/tmp/out")
+        pass
+
+    def _get_graph(self, graph: gz.Digraph):
+        label_terms = []
+
+        if self.messages:
+            label_terms.append("Messages: " + ", ".join(message.message for message in self.messages))
+
+        if self.condition:
+            label_terms.append("Condition: " + str(self.condition))
+        
+        graph.node(str(id(self)), "\n".join(label_terms))
+
+        strid = str(id(self))
+
+        if self.positivenode:
+            posnode = self.positivenode._get_graph(graph)
+            graph.edge(strid, posnode, label=" True")
+
+        if self.negativenode:
+            negnode = self.negativenode._get_graph(graph)
+            graph.edge(strid, negnode, label=" False")
+        
+        return strid
+
     
     def pass_down_next_graph(self, next_graph_head: ConditionNode) -> None:
         for node_name in ("positivenode", "negativenode"):
             if (node := getattr(self, node_name)):
+                if isinstance(node, TerminalNode) and not(node.messages):
+                    setattr(self, node_name, next_graph_head)
+
                 node.pass_down_next_graph(next_graph_head)
             else:
                 setattr(self, node_name, next_graph_head)
@@ -153,6 +290,16 @@ class ConditionNode:
 def process_conds(conds: List[Condition]) -> ConditionNode:
     cond_connection_map: Dict[frozenset[Symbol], List[Condition]] = {}
 
+    # sympy can only handle at most 8 unique symbols in an equation, because their simplifying
+    # method scales hard with that
+    # this gets around that by essentially splitting the tree into subtrees
+
+    # if two sets of symbols are completely disconnected, they'll always just be put into separate trees
+    # because that just makes the tree smaller and simpler
+
+    # if a valid network of interconnected symbols has more than 8 components
+    # things get complicated
+    # we find the least bad way to split the set, repeating the fewest possible number of elements
     for cond in conds:
         condslist = cond.condition.free_symbols
 
@@ -183,20 +330,21 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
             # that kinda sucks, because the individual components are okay
             # so we can't just throw them away
 
-            closeness_map: Dict[int, List[Tuple[Condition, List[Condition]]]] = {}
+            lowest_connection = None
 
             for i, cond in enumerate(grouped_conds):
                 other_conds = grouped_conds[:i] + grouped_conds[i+1:]
 
-                closeness_sum = sum(sum(1 for j in other_cond.condition.free_symbols if j in cond.condition.free_symbols) for other_cond in other_conds)
+                connection_sum = sum(sum(1 for j in other_cond.condition.free_symbols if j in cond.condition.free_symbols) for other_cond in other_conds)
 
-                closeness_map[closeness_sum] = closeness_map.get(closeness_sum, []) + [(cond, other_conds)]
+                if lowest_connection == None or connection_sum < lowest_connection: 
+                    least_connected = cond
+                    lowest_connection = connection_sum
+                    least_connected_other_conds = other_conds
             
-            least_connected, other_conds = closeness_map[min(closeness_map.keys())][0]
-
             # subtract the least connected key from the other keys
-            key = frozenset(it.chain(*(cond.condition.free_symbols for cond in other_conds)))
-            grouped_conds = other_conds 
+            key = frozenset(it.chain(*(cond.condition.free_symbols for cond in least_connected_other_conds)))
+            grouped_conds = least_connected_other_conds 
 
             least_connected_symbols = frozenset(least_connected.condition.free_symbols)
             
@@ -218,12 +366,15 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
         list_of_disjoint_groups.append(grouped_conds)
         list_of_disjoint_groups += [v for v in newly_created_kvs.values()]
 
+    # this function is the heart of tree construction
     def rec_cond_crawler(expression_list: List[Condition], lowest_cost: Optional[int] = None) -> Tuple[float, Optional[ConditionNode]]:
+        # if you're here, it means there are no more conditions to try and meet. Make a terminal node
         if not expression_list:
-            return (0, ConditionNode(None, None, None))
+            return (0, TerminalNode(None, None))
 
+        # this is a list of every unique symbol at this layer
+        # symbols are the atoms of the logic here - does a string contain a given word, etc. etc.
         condslist = list({free_symb for term in expression_list for free_symb in term.condition.free_symbols})
-        
 
         costlist = []
 
@@ -260,9 +411,13 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
     if not first_graph:
         return None
 
+    # construct the tree for the first independent network
     _, ret = rec_cond_crawler(first_graph)
     ret.messages = []
     last_head = ret
+
+    # for each additional tree, create it attached to the tree before it
+    # to make a treetree
     
     for independent_graph in val_iter:
         _, additional_head = rec_cond_crawler(independent_graph)
@@ -271,3 +426,5 @@ def process_conds(conds: List[Condition]) -> ConditionNode:
         last_head = additional_head
 
     return ret
+
+
