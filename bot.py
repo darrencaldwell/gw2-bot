@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 import datetime
 import declarative_tree as dt
 from sympy import Not
-from parser import parse_string
+from cond_parser import parse_string
 import config as cf
 import csv
 from typing import List
