@@ -16,8 +16,8 @@ import declarative_tree as dt
 from sympy import Not
 from cond_parser import parse_string
 import config as cf
-import csv
-from typing import List
+from typing import Dict
+import pandas
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -74,21 +74,33 @@ def seconds_until_9am() -> float:
     print(f"{target} - {now} = {diff}")
     return diff
 
-def parse_cond_line(line: List[str]) -> dt.Condition:
+def parse_cond_line(line: Dict[str, str]) -> dt.Condition | None:
     try:
-        cond = dt.Condition(condition = parse_string(line[1]), message = dt.Response(message = line[0], author = line[2]))
+        cond = dt.Condition(condition = parse_string(line["condition"]), message = dt.Response(message = line["response"], author = line["author"]))
     except Exception as e:
         print("Failed to load line " + str(line) + " " + str(e))
         return None
 
     return cond
 
-with open(cf.RESPONSE_FILENAME, "r") as f:
-    csvreader = csv.reader(f)
-    condslist = [parsed_line for line in csvreader if (parsed_line := parse_cond_line(line))]
+dataframe = pandas.read_csv(cf.RESPONSE_FILENAME)
 
-print(condslist)
-tree = dt.process_conds(condslist)
+async def write_dataframe_task():
+    async with dataframe_lock:
+        dataframe.to_csv(cf.RESPONSE_FILENAME)
+
+def gen_tree_from_csv():
+    condslist = [parsed_line for line in dataframe.iterrows() if (parsed_line := parse_cond_line(line[1]))]
+
+    return dt.process_conds(condslist)
+
+def get_messages_owned_by(username: str):
+    return (i[1] for i in dataframe.iterrows() if i[1]["author"] == username)
+
+tree = gen_tree_from_csv()
+
+message_lock = asyncio.Lock()
+dataframe_lock = asyncio.Lock()
 
 def build_message(role) -> str:
     intro = (f"{role.mention} Good morning members I hope you have a good "
@@ -124,7 +136,12 @@ class MyClient(discord.Client):
         content = message.content.lower()
         channel = message.channel
 
-        messages = tree.get_messages(message)
+        async with message_lock: 
+            # technically this is bad, ideally we'd use a read/write lock here
+            # but python doesn't have one natively and adding another dependency for this seems not worth it
+
+            messages = tree.get_messages(message)
+
         for response in messages:
             await channel.send(response)
 
@@ -174,27 +191,69 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
     condition = condition.lower()
 
     try:
-        parsed_condition = parse_string(condition)
+        parse_string(condition)
     
     except Exception as e:
-        await interaction.response.send_message(tutorial_text, ephemeral=True)
+        await interaction.response.send_message("Error: " + str(e) + " use /tutorialisland to learn how to message good", ephemeral=True)
         return
-    
-    with open(cf.RESPONSE_FILENAME, "a") as f:
-        csvwriter = csv.writer(f)
-        print("Adding: " + str(condition) + " from " + interaction.user.name)
-        csvwriter.writerow([response, condition, interaction.user.name])
 
-    resp_obj = dt.Response(message=response, author=interaction.user.name)
+    await interaction.response.send_message("Condition parsed succesfully, just adding it to the tree :) ")
 
-    condslist.append(dt.Condition(resp_obj, parsed_condition))
-    tree = dt.process_conds(condslist)
-    
-    await interaction.response.send_message("All good :) ")
+    async with dataframe_lock:
+        dataframe.loc[len(dataframe)] = {"response": response, "condition": condition, "author": interaction.user.name}
+
+        tree_obj = gen_tree_from_csv()
+
+        dataframe.to_csv(cf.RESPONSE_FILENAME)
+
+    async with message_lock:
+        tree = tree_obj
 
 @client.tree.command()
 async def tutorial_island(interaction: discord.Interaction):
+    """Tells you how to do things"""
     await interaction.response.send_message(tutorial_text, ephemeral=True)
+
+@client.tree.command()
+async def list_responses(interaction: discord.Interaction):
+    """Lists all the responses you've made, and their you-specific ID. Protip: use this to get the id of responses you want to remove"""
+    async with dataframe_lock:
+        responses = get_messages_owned_by(interaction.user.name)
+    
+    retstr = "\n- ".join(str(i) + ": " + response["response"] + " when " + response["condition"] for i, response in enumerate(responses))
+
+    await interaction.response.send_message(retstr, ephemeral=True)
+
+@client.tree.command()
+async def remove_response(interaction: discord.Interaction, responsenum: int):
+    """Delete a response by index. Protip: use list_responses to figure out what this means."""
+    global tree
+
+    async with dataframe_lock:
+        responses = get_messages_owned_by(interaction.user.name)
+
+        try:
+            for _ in range(responsenum):
+                next(responses)
+        except StopIteration:
+            await interaction.response.send_message("That's not a real message bro")
+        
+        idx = next(responses).name
+
+        try:
+            dataframe.drop(idx, inplace=True)
+        except Exception as e:
+            await interaction.response.send_message("Oops: " + str(e))
+
+        await interaction.response.send_message("Condition removed :)")
+
+        tree_obj = gen_tree_from_csv()
+
+        dataframe.to_csv(cf.RESPONSE_FILENAME)
+    
+    async with message_lock:
+        tree = tree_obj
+
 
 @client.tree.command()
 async def gen_graph(interaction: discord.Interaction):
