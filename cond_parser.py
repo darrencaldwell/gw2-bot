@@ -2,7 +2,7 @@ import sys
 
 import lrparsing
 from lrparsing import Keyword, List, Prio, Ref, THIS, Token, Tokens
-from declarative_tree import Contains, OneIn, Condition, AuthoredBy
+from declarative_tree import Contains, OneIn, Condition, AuthoredBy, ContainsWord
 from sympy import Or, And, Not
 
 from typing import Tuple
@@ -21,8 +21,9 @@ class ExprParser(lrparsing.Grammar):
     onein = Keyword("onein") + (T.integer | (":" + T.integer))
     contains = Keyword("contains") + (T.string | (":" + T.string))
     authoredby = Keyword("authoredby") + (T.string | (":" + T.string))
+    containsword = Keyword("containsword") + (T.string | (":" + T.string))
 
-    condition = onein | contains | authoredby
+    condition = onein | contains | authoredby | containsword
     
     or_list = List(expr, "|", min=2)
     and_list = List(expr, "&", min=2)
@@ -51,6 +52,11 @@ def rec_symp_crawler(tup: Tuple) -> Condition:
             string = string[1:-1]
             return Contains(string)
         
+        case "containsword":
+            string = tup[2][1] if tup[2][1] != ":" else tup[3][1]
+            string = string[1:-1]
+            return ContainsWord(string)
+        
         case "authoredby":
             string = tup[2][1] if tup[2][1] != ":" else tup[3][1]
             string = string[1:-1]
@@ -62,6 +68,9 @@ def rec_symp_crawler(tup: Tuple) -> Condition:
         case "and_list":
             ret = tuple(rec_symp_crawler(i) for i in tup[1:] if not i[0].name == "'&'")
             return And(*ret)
+
+        case "sub_bool":
+            return rec_symp_crawler(tup[2])
         
         case "not_term":
             return Not(rec_symp_crawler(tup[2]))
@@ -71,11 +80,14 @@ def rec_symp_crawler(tup: Tuple) -> Condition:
         
 def parse_string(string: str) -> Condition:
     parse_tree = ExprParser.parse(string)
-    return rec_symp_crawler(parse_tree)
+    ret = rec_symp_crawler(parse_tree)
+    return ret
 
 if __name__=="__main__":
-    test = ExprParser.parse("contains: \"foo\" & contains \"bar\" & contains \"Darren\" & ~contains \"Fish\"")
-    bar = rec_symp_crawler(test)
+    # test = ExprParser.parse("contains: \"foo\" & contains \"bar\" & contains \"Darren\" & ~contains \"Fish\"")
+    # bar = rec_symp_crawler(test)
 
-    foo = ExprParser.parse('contains: "darren"')
+    # foo = ExprParser.parse('contains: "darren"')
+    bar = ExprParser.parse('(contains: "woman" | contains: "lady") & (contains: "big" | contains: "large" | contains: "giant" | contains: "huge")')
+    barr = rec_symp_crawler(bar)
     breakpoint()

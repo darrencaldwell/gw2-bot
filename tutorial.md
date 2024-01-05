@@ -4,6 +4,7 @@ The base element of the condition for a response is the Condition. The following
 - **contains: "string"** e.g. **contains: "foo"** - note that the quotation marks are mandatory. I have not bothered to implement any form of escaping characters, so you can't have a " inside a string. Conditions are case-insensitive.  
 - **onein: number** e.g. **onein: 4**. Adds a chance for a message to be displayed or not.
 - **authoredby: "name"** e.g. **authoredby: "alice"** - checks message author. Uses their full discord name, not their server nickname. Note that names are also case-insensitive right now.  
+ - **containsword: "string"** e.g. **containsword: "foo"** - basically the same as contains, but doesn't get triggered by words inside other words
 
 The colons are actually optional, onein 4 works as well as onein: 4.
 

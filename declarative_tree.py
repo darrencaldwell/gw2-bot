@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import config as cf
 import graphviz as gz
 import discord as ds
+import re
 from random import randint
 
 AUTHOR_DICT = {}
@@ -26,6 +27,10 @@ AUTHOR_DICT = {}
 # However, sometimes you don't want this behaviour. The best example is probably OneIn - one 1 in 6 chance passing does not imply
 # other 1-in-6 chances should also pass. To get around this, we just append the object ID to its name. 
 
+def dec_condition(condition: Symbol, *, name = None):
+    
+    return Symbol
+
 class Contains(Symbol):
     def __init__(self, *args):
         super().__init__()
@@ -34,6 +39,22 @@ class Contains(Symbol):
 
     def eval(self, _message: ds.Message, content: str):
         return self.name in content
+    
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "Contains: \"" + self.name + "\""
+
+class ContainsWord(Symbol):
+    def __init__(self, *args):
+        super().__init__()
+        self.prob=0.1
+        self.name = self.name.lower()
+        self.escname = re.escape(self.name)
+
+    def eval(self, _message: ds.Message, content: str):
+        return re.search(r"\b" + self.escname + r"\b", content)
     
     def __repr__(self):
         return self.__str__()
