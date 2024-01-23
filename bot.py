@@ -18,6 +18,8 @@ from cond_parser import parse_string
 import config as cf
 from typing import Dict
 import pandas
+from log import LogObject
+from weather import generate_message
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -32,11 +34,15 @@ TIME = datetime.time(hour=9),
 CHANNEL_ID = 1166772628216893620
 ROLE_ID = 1168850068665794661
 GUILD_ID = 1099793030678069338
+OTHER_CHANNEL_ID = 1199439405245550703
+USER_ID = 270662581432221707
 
 #OSCAR TESTING
 # CHANNEL_ID = 723899751732346964
 # ROLE_ID = 1180661716107931658
 # GUILD_ID = 723899751732346960
+# OTHHER_CHANNLEL_ID = 723899751732346964
+# USER_ID = 246742940116844546
 
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -97,7 +103,8 @@ def gen_tree_from_csv():
 def get_messages_owned_by(username: str):
     return (i[1] for i in dataframe.iterrows() if i[1]["author"] == username)
 
-tree = gen_tree_from_csv()
+with LogObject("tree building"):
+    tree = gen_tree_from_csv()
 
 message_lock = asyncio.Lock()
 dataframe_lock = asyncio.Lock()
@@ -122,8 +129,12 @@ class MyClient(discord.Client):
         channel = self.get_channel(CHANNEL_ID)
         guild = self.get_guild(GUILD_ID)
         role = guild.get_role(ROLE_ID)
+        other_channel = self.get_channel(OTHER_CHANNEL_ID)
+        user = await self.fetch_user(USER_ID)
 
-        cog = MyCog(self, channel, role)
+        print(user)
+
+        cog = MyCog(self, channel, other_channel, role, user)
         print(f'Logged on as {self.user} for channel {channel}')
 
     async def setup_hook(self):
@@ -147,12 +158,18 @@ class MyClient(discord.Client):
 
 
 class MyCog(commands.Cog):
-    def __init__(self, client, channel, role):
+    def __init__(self, client, channel, other_channel, role, user):
         self.client = client
         self.channel = channel
+        self.other_channel = other_channel
+
+        print(self.other_channel)
+        
         self.role = role
         self.my_task.start()
         self.adjust_probs.start()
+        self.get_weather.start()
+        self.user = user
 
     def cog_unxload(self):
         self.my_task.cancel()
@@ -172,6 +189,20 @@ class MyCog(commands.Cog):
     async def adjust_probs(self):
         for author in dt.AUTHOR_DICT:
             dt.AUTHOR_DICT[author] = max(0, dt.AUTHOR_DICT[author] - adjust_prob_by)
+
+    @tasks.loop(hours=1)
+    async def pregenerate_graph(self):
+        tree.get_graph()
+
+    @tasks.loop(seconds=10)
+    async def get_weather(self):
+        await asyncio.sleep(seconds_until_9am())
+        message = generate_message()
+
+        if message:
+            await self.channel.send(message)
+            await self.other_channel.send(self.user.mention)
+
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -254,15 +285,19 @@ async def remove_response(interaction: discord.Interaction, responsenum: int):
     async with message_lock:
         tree = tree_obj
 
+# @client.tree.command()
+# async def gen_graph(interaction: discord.Interaction):
+#     """Gives you the current response tree state"""
 
-@client.tree.command()
-async def gen_graph(interaction: discord.Interaction):
-    """Gives you the current response tree state"""
+#     try:
+#         file = discord.File("/tmp/out.jpeg")
 
-    tree.get_graph()
+#         await interaction.response.send_message(file=file)
+    
+#     except:
+#         await interaction.response.send_message("FILE MISSING!1!!!!")
 
-    file = discord.File("/tmp/out.jpeg")
-
-    await interaction.response.send_message(file=file)
+# with LogObject("graph generation"):
+#     tree.get_graph()
 
 client.run(TOKEN)
