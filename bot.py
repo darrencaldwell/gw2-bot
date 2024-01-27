@@ -19,7 +19,7 @@ import config as cf
 from typing import Dict
 import pandas
 from log import LogObject
-from weather import generate_message
+import weather as wth
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -34,15 +34,13 @@ TIME = datetime.time(hour=9),
 CHANNEL_ID = 1166772628216893620
 ROLE_ID = 1168850068665794661
 GUILD_ID = 1099793030678069338
-OTHER_CHANNEL_ID = 1199439405245550703
-USER_ID = 270662581432221707
+WEATHER_CHANNEL_ID = 1199439405245550703
 
 #OSCAR TESTING
-# CHANNEL_ID = 723899751732346964
-# ROLE_ID = 1180661716107931658
-# GUILD_ID = 723899751732346960
-# OTHHER_CHANNLEL_ID = 723899751732346964
-# USER_ID = 246742940116844546
+CHANNEL_ID = 723899751732346964
+ROLE_ID = 1180661716107931658
+GUILD_ID = 723899751732346960
+WEATHER_CHANNEL_ID = 723899751732346964
 
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -129,12 +127,9 @@ class MyClient(discord.Client):
         channel = self.get_channel(CHANNEL_ID)
         guild = self.get_guild(GUILD_ID)
         role = guild.get_role(ROLE_ID)
-        other_channel = self.get_channel(OTHER_CHANNEL_ID)
-        user = await self.fetch_user(USER_ID)
+        other_channel = self.get_channel(WEATHER_CHANNEL_ID)
 
-        print(user)
-
-        cog = MyCog(self, channel, other_channel, role, user)
+        cog = MyCog(self, channel, other_channel, role)
         print(f'Logged on as {self.user} for channel {channel}')
 
     async def setup_hook(self):
@@ -158,18 +153,15 @@ class MyClient(discord.Client):
 
 
 class MyCog(commands.Cog):
-    def __init__(self, client, channel, other_channel, role, user):
+    def __init__(self, client: discord.Client, channel, other_channel, role):
         self.client = client
         self.channel = channel
         self.other_channel = other_channel
 
-        print(self.other_channel)
-        
         self.role = role
         self.my_task.start()
         self.adjust_probs.start()
         self.get_weather.start()
-        self.user = user
 
     def cog_unxload(self):
         self.my_task.cancel()
@@ -197,11 +189,17 @@ class MyCog(commands.Cog):
     @tasks.loop(seconds=10)
     async def get_weather(self):
         await asyncio.sleep(seconds_until_9am())
-        message = generate_message()
+        messages = await wth.generate_messages()
 
-        if message:
-            await self.channel.send(message)
-            await self.other_channel.send(self.user.mention)
+        for user, message in messages.items():
+            if message:
+                try:
+                    user = await self.client.fetch_user(user)
+                except:
+                    continue
+                
+                await self.other_channel.send(user.mention)
+                await self.other_channel.send(message)
 
 
 intents = discord.Intents.default()
@@ -239,6 +237,28 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
 
     async with message_lock:
         tree = tree_obj
+
+@client.tree.command()
+async def new_weather(interaction: discord.Interaction, lat: float, long: float):
+    """Put in your lat and long to get weather pings"""
+    ret_code = await wth.add_user_to_dataframe(interaction.user.id, lat, long)
+
+    if ret_code:
+        await interaction.response.send_message(ret_code, ephemeral=True)
+    
+    else:
+        await interaction.response.send_message("Cool", ephemeral=True)
+
+@client.tree.command()
+async def del_weather(interaction: discord.Interaction):
+    """Delete your weather pings"""
+    ret_code = await wth.remove_user_from_dataframe(interaction.user.id)
+
+    if ret_code:
+        await interaction.response.send_message(ret_code, ephemeral=True)
+    
+    else:
+        await interaction.response.send_message("Cool", ephemeral=True)
 
 @client.tree.command()
 async def tutorial_island(interaction: discord.Interaction):
