@@ -86,13 +86,13 @@ def get_times(rain_times):
     last_time = start_time
 
     for time in rt_iter:
-        if time > last_time + 3:
-            times.append((start_time, min(last_time+3, 24)))
+        if time > last_time + cf.WEATHER_TOLERANCE:
+            times.append((start_time, min(last_time+cf.WEATHER_TOLERANCE, 24)))
             start_time = time
 
         last_time = time
     
-    times.append((start_time, min(last_time + 3, 24)))
+    times.append((start_time, min(last_time + cf.WEATHER_TOLERANCE, 24)))
 
     return times
 

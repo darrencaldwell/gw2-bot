@@ -20,9 +20,11 @@ from typing import Dict
 import pandas
 from log import LogObject
 import weather as wth
+from drk import my_mut_record
+import datetime
 
 load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
+TOKEN = 'MTE3NjYyNjE2MDQ4MjkxNDM4NQ.G85bxh._svstCyhuGKRfnvNmjD_WHiGZx8u_-IUvg1yCI'
 TIME = datetime.time(hour=9),
 
 # TESTING
@@ -37,10 +39,10 @@ GUILD_ID = 1099793030678069338
 WEATHER_CHANNEL_ID = 1199439405245550703
 
 #OSCAR TESTING
-CHANNEL_ID = 723899751732346964
-ROLE_ID = 1180661716107931658
-GUILD_ID = 723899751732346960
-WEATHER_CHANNEL_ID = 723899751732346964
+# CHANNEL_ID = 723899751732346964
+# ROLE_ID = 1180661716107931658
+# GUILD_ID = 723899751732346960
+# WEATHER_CHANNEL_ID = 723899751732346964
 
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -139,8 +141,14 @@ class MyClient(discord.Client):
     async def on_message(self, message):
         if message.author == client.user:
             return
+        
         content = message.content.lower()
         channel = message.channel
+
+        if message.author.id == 511552638853185536:
+            if not my_mut_record.has_been_used:
+                my_mut_record.has_been_used = True
+                await channel.send(my_mut_record.message)
 
         async with message_lock: 
             # technically this is bad, ideally we'd use a read/write lock here
@@ -176,6 +184,11 @@ class MyCog(commands.Cog):
         thread = await message.create_thread(name=date_string, auto_archive_duration=1440)
         for react in EMOJI_MAP.keys():
             await message.add_reaction(react)
+
+    @tasks.loop(hours=1)
+    async def reset_mut_record(self):
+        if datetime.datetime.now().hour == my_mut_record.reset_time:
+            my_mut_record.has_been_used = False
     
     @tasks.loop(hours=1)
     async def adjust_probs(self):
@@ -233,7 +246,7 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
 
         tree_obj = gen_tree_from_csv()
 
-        dataframe.to_csv(cf.RESPONSE_FILENAME)
+        dataframe.to_csv(cf.RESPONSE_FILENAME, index=False)
 
     async with message_lock:
         tree = tree_obj
