@@ -24,7 +24,7 @@ from drk import my_mut_record
 import datetime
 
 load_dotenv()
-TOKEN = 'MTE3NjYyNjE2MDQ4MjkxNDM4NQ.G85bxh._svstCyhuGKRfnvNmjD_WHiGZx8u_-IUvg1yCI'
+TOKEN = os.getenv("DISCORD_TOKEN")
 TIME = datetime.time(hour=9),
 
 # TESTING
