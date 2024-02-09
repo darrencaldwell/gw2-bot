@@ -201,7 +201,7 @@ class MyCog(commands.Cog):
 
     @tasks.loop(seconds=10)
     async def get_weather(self):
-        await asyncio.sleep(seconds_until_9am())
+        await asyncio.sleep(seconds_until_9am()-1)
         messages = await wth.generate_messages()
 
         for user, message in messages.items():
