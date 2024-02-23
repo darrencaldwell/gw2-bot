@@ -56,6 +56,25 @@ columns = {column_defn.name: column_defn for column_defn in column_defns}
 
 user_data = LockingPandasRWer("user_data.csv", [column for column in columns])
 
+def sentence_case(string: str):
+    to_upper = True
+
+    ret = ""
+
+    for char in string:
+        if to_upper and char.isalpha():
+            char = char.upper()
+            to_upper = False
+        
+        elif char == ".":
+            to_upper = True
+        
+        ret += char
+    
+    return ret
+             
+
+
 async def modify(string: str, user_id: int):
     async with user_data.read as dataframe:
         if user_id in dataframe.index:
@@ -63,7 +82,9 @@ async def modify(string: str, user_id: int):
         else:
             personality = "neutral"
 
-    return personality_replace(string, personality)
+    replaced = personality_replace(string, personality)
+
+    return sentence_case(replaced)
 
 async def amend(usr: int, **kwargs: str):
     kwargs = {k: v for k, v in kwargs.items() if k in columns and v in columns[k].all}
