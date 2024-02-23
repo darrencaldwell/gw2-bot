@@ -1,0 +1,212 @@
+[nice]
+greeting = [
+    "{opener}, {compliment}.",
+    "{opener}. {positive_statement}!"
+    ]
+
+opener = [
+    "fi",
+    "hello",
+    "yo",
+    "good day"
+]
+
+compliment = [
+    "{title} of {noun}",
+    "{adjective} {title} of {noun}",
+    "{adjective} {title}",
+    "sport",
+]
+
+title = [
+    "prince",
+    "wizard",
+    "pope",
+    "monarch",
+    "pontiff",
+    "muse",
+    "friend",
+    "pal",
+    "champion",
+    "{title} and {title}",
+    "legend",
+    "angel",
+    "god"
+]
+
+adjective = [
+    "thrice-blessed",
+    "sanctified",
+    "chill",
+    "cool",
+    "friendly",
+    "almighty",
+    "transcendental",
+    "boon-dispensing",
+    "bodacious",
+    "radical",
+    "amazing",
+    "peachy keen",
+    "heavenly",
+    "{adjective} and {adjective}",
+    "legendary",
+    "all-knowing",
+    "neat",
+    "{intensifier} {adjective}"
+]
+
+noun = [
+    "all that is good",
+    "puppies",
+    "rainbows",
+    "the {adjective} realm",
+    "{noun} and {noun}",
+    "ice cream",
+    "unicorns",
+    "happy orphans",
+    "kittens",
+    "peace",
+    "happiness",
+    "prosperity",
+    "the greatest good",
+]
+
+intensifier = [
+    "very",
+    "extremely",
+    "totally",
+    "entirely",
+    "undeniably"
+]
+
+positive_statement = [
+    "I {verb} you",
+    "I think you're {adjective}"
+]
+
+verb = [
+    "appreciate",
+    "love",
+    "respect",
+    "admire",
+]
+
+
+[neutral]
+greeting = "{opener}."
+
+opener = [
+    "Hi",
+    "Hello",
+    "Yo",
+]
+
+[burning_hate]
+greeting = [
+    "{opener}, {insult}.",
+    "{opener}. {negative_statement}."
+    ]
+
+opener = [
+    "fuck you",
+    "bad day",
+    "{opener}. {negative_statement}"
+]
+
+insult = [
+    "{adjective} {title} of {noun}",
+    "{adjective} {title}",
+    "{title}"
+]
+
+title = [
+    "wretch",
+    "whelp",
+    "bastard",
+    "pustule",
+    "{title} of a human being",
+    "traitor",
+    "nincompoop",
+    "dunderhead",
+    "mouth-breather",
+    "scumbag",
+    "devil",
+    "wankstain",
+    "arsehole",
+    "tumor",
+    "abomination",
+    "anal fistula",
+    "stubbed toe",
+    "plague rat",
+    "hellspawn",
+]
+
+adjective = [
+    "suppurating",
+    "putrescent",
+    "rotting",
+    "odious",
+    "repugnant",
+    "rotten",
+    "thrice-damned",
+    "monstrous",
+    "demonic",
+    "devious",
+    "conniving",
+    "{adjective} and {adjective}",
+    "{intensifier} {adjective}",
+    "universally hated",
+    "utterly pointless",
+    "damnable",
+    "malformed",
+    "unforgivable",
+    "forgettable",
+    "flatulent",
+    "moronic",
+    "irredeemable",
+    "useless",
+    "evil",
+    "villainous",
+    "atavistic",
+    "cancerous",
+    "mutilated",
+    "mangled",
+    "cursed",
+    "hate-stained",
+    "blasted",
+    "gods-damned",
+]
+
+noun = [
+    "the {adjective} realms",
+    "all that is evil",
+    "everything shit",
+    "sad orphans",
+    "crying kittens",
+    "the blasted lands",
+    "the hell beneath hell",
+]
+
+intensifier = [
+    "very",
+    "extremely",
+    "totally",
+    "entirely",
+    "undeniably"
+]
+
+negative_statement = [
+    "I {verb} you",
+    "I think you're {adjective}"
+]
+
+verb = [
+    "hate",
+    "despise",
+    "wish to kill",
+    "wish to harm",
+    "loathe",
+]
+
+
+
