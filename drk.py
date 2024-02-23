@@ -42,9 +42,7 @@ def read_handler(*args):
         commands = {}
         
         with open("/tmp/edits.json", "r") as f:
-            commands = json.load(f)
-
-        
+            commands = json.load(f)        
         
         if "reset_time" in commands:
             my_mut_record.reset_time = int(commands["reset_time"])

@@ -97,7 +97,7 @@ def get_times(rain_times):
     return times
 
 def generate_time_line(tup: t.Tuple[int, int]):
-    return "- between " + str(tup[0]) + " and " + str(tup[1]) + " o'clock!\n"
+    return "\n- between " + str(tup[0]) + " and " + str(tup[1]) + " o'clock!"
 
 def generate_message(times):
     if not times:
@@ -108,16 +108,7 @@ def generate_message(times):
     with open("whimsey.txt", "r") as f:
         lines = [txt[:-1] for txt in f]
     
-    message = random.choice(lines)
-
-    with open("ending.txt", "r") as f:
-        lines = [txt for txt in f]
-
-    ending = random.choice(lines)
-
-    message += " Looks like it's going to rain! Better be careful with that washing! "
-
-    message += ending
+    message = "{greeting} {will_rain} {times_are}"  #+ random.choice(lines)
 
     for line in times:
         message += generate_time_line(line)

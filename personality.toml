@@ -1,6 +1,6 @@
 [nice]
 greeting = [
-    "{opener}, {compliment}.",
+    "{opener}, {nickname}.",
     "{opener}. {positive_statement}!"
     ]
 
@@ -11,7 +11,7 @@ opener = [
     "good day"
 ]
 
-compliment = [
+nickname = [
     "{title} of {noun}",
     "{adjective} {title} of {noun}",
     "{adjective} {title}",
@@ -91,9 +91,28 @@ verb = [
     "admire",
 ]
 
+will_rain = [
+    "Hold your horses!",
+    "Hold your horses there, buckaroo!",
+    "Hold on tight mister!",
+    "Wait one moment!",
+    "Hang on minute!",
+    "Wait a second!",
+]
+
+times_are = [
+    "The rains, they are a'falling",
+    "The heavens open",
+    "The clouds lay down their burdens",
+    "It starts bucketing down",
+    "Proper deluge coming",
+]
 
 [neutral]
-greeting = "{opener}."
+greeting = [
+    "{opener}.",
+    "{opener}, {nickname}."
+]
 
 opener = [
     "Hi",
@@ -101,9 +120,35 @@ opener = [
     "Yo",
 ]
 
+nickname = [
+    "{adjective} {title} of {noun}",
+    "{adjective} {title}",
+    "{title}"
+]
+
+title = [
+    "being",
+    "person",
+    "entity"
+]
+
+adjective = [
+    "extant",
+    "alive"
+]
+
+will_rain = [
+    "I predict it will rain",
+    "The forecast predicts it will rain"
+]
+
+times_are = [
+    ""
+]
+
 [burning_hate]
 greeting = [
-    "{opener}, {insult}.",
+    "{opener}, {nickname}.",
     "{opener}. {negative_statement}."
     ]
 
@@ -113,8 +158,7 @@ opener = [
     "{opener}. {negative_statement}"
 ]
 
-insult = [
-    "{adjective} {title} of {noun}",
+nickname = [
     "{adjective} {title}",
     "{title}"
 ]
@@ -208,5 +252,18 @@ verb = [
     "loathe",
 ]
 
+will_rain = [
+    "For your sins",
+    "I have arranged things such that",
+    "Because {negative_statement}",
+    "Because {negative_statement}",
+    "Because {negative_statement}",
+]
 
-
+times_are = [
+    "a terrible storm will strike you",
+    "the sky will give you the watery punishment you deserve",
+    "a flood will come to wipe you from this miserable Earth",
+    "watery assassins will descend from the sky to hunt you down",
+    "it'll rain and ruin all your washing",
+]

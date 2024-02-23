@@ -16,8 +16,13 @@ import declarative_tree as dt
 from sympy import Not
 from cond_parser import parse_string
 import config as cf
-from typing import Dict
-import pandas
+from typing import Dict, Literal
+from storage import LockingPandasRWer
+
+from personality import amend, modify, columns
+
+import pandas as pd
+
 from log import LogObject
 import weather as wth
 from drk import my_mut_record
@@ -89,25 +94,23 @@ def parse_cond_line(line: Dict[str, str]) -> dt.Condition | None:
 
     return cond
 
-dataframe = pandas.read_csv(cf.RESPONSE_FILENAME)
+dataframe_reader = LockingPandasRWer(cf.RESPONSE_FILENAME)
 
-async def write_dataframe_task():
-    async with dataframe_lock:
-        dataframe.to_csv(cf.RESPONSE_FILENAME)
+#dataframe = dataframe_reader.dataframe
 
-def gen_tree_from_csv():
-    condslist = [parsed_line for line in dataframe.iterrows() if (parsed_line := parse_cond_line(line[1]))]
+async def gen_tree_from_csv():
+    async with dataframe_reader.read as dataframe:
+        condslist = [parsed_line for line in dataframe.iterrows() if (parsed_line := parse_cond_line(line[1]))]
 
     return dt.process_conds(condslist)
 
-def get_messages_owned_by(username: str):
+async def get_messages_owned_by(username: str, dataframe: pd.DataFrame):
     return (i[1] for i in dataframe.iterrows() if i[1]["author"] == username)
 
 with LogObject("tree building"):
-    tree = gen_tree_from_csv()
+    tree = asyncio.run(gen_tree_from_csv())
 
 message_lock = asyncio.Lock()
-dataframe_lock = asyncio.Lock()
 
 def build_message(role) -> str:
     intro = (f"{role.mention} Good morning members I hope you have a good "
@@ -138,7 +141,7 @@ class MyClient(discord.Client):
         self.tree.copy_global_to(guild=GUILD)
         await self.tree.sync(guild=GUILD)
 
-    async def on_message(self, message):
+    async def on_message(self, message: discord.message.Message):
         if message.author == client.user:
             return
         
@@ -157,6 +160,7 @@ class MyClient(discord.Client):
             messages = tree.get_messages(message)
 
         for response in messages:
+            response = await modify(response, message.author.id)
             await channel.send(response)
 
 
@@ -167,23 +171,23 @@ class MyCog(commands.Cog):
         self.other_channel = other_channel
 
         self.role = role
-        self.my_task.start()
+        # self.my_task.start()
         self.adjust_probs.start()
         self.get_weather.start()
 
     def cog_unxload(self):
-        self.my_task.cancel()
+        # self.my_task.cancel()
         self.adjust_probs.cancel()
 
-    @tasks.loop(seconds=10)
-    async def my_task(self):
-        await asyncio.sleep(seconds_until_9am())
-        date_string = f"{datetime.datetime.today().day}/{datetime.datetime.today().month}"
-        print(f"Posting thread for {date_string}")
-        message = await self.channel.send(build_message(self.role))
-        thread = await message.create_thread(name=date_string, auto_archive_duration=1440)
-        for react in EMOJI_MAP.keys():
-            await message.add_reaction(react)
+    # @tasks.loop(seconds=10)
+    # async def my_task(self):
+    #     await asyncio.sleep(seconds_until_9am())
+    #     date_string = f"{datetime.datetime.today().day}/{datetime.datetime.today().month}"
+    #     print(f"Posting thread for {date_string}")
+    #     message = await self.channel.send(build_message(self.role))
+    #     thread = await message.create_thread(name=date_string, auto_archive_duration=1440)
+    #     for react in EMOJI_MAP.keys():
+    #         await message.add_reaction(react)
 
     @tasks.loop(hours=1)
     async def reset_mut_record(self):
@@ -212,6 +216,8 @@ class MyCog(commands.Cog):
                     user = await self.client.fetch_user(user)
                 except:
                     continue
+                
+                message = await modify(message, user.id)
                 
                 await self.other_channel.send(user.mention)
                 await self.other_channel.send(message)
@@ -243,15 +249,12 @@ async def new_response(interaction: discord.Interaction, response: str, conditio
 
     await interaction.response.send_message("Condition parsed succesfully, just adding it to the tree :) ")
 
-    async with dataframe_lock:
+    async with dataframe_reader.edit as dataframe:
         dataframe.loc[len(dataframe)] = {"response": response, "condition": condition, "author": interaction.user.name}
-
         tree_obj = gen_tree_from_csv()
 
-        dataframe.to_csv(cf.RESPONSE_FILENAME, index=False)
-
     async with message_lock:
-        tree = tree_obj
+        tree = await tree_obj
 
 @client.tree.command()
 async def new_weather(interaction: discord.Interaction, lat: float, long: float):
@@ -278,26 +281,41 @@ async def del_weather(interaction: discord.Interaction):
 @client.tree.command()
 async def tutorial_island(interaction: discord.Interaction):
     """Tells you how to do things"""
-    await interaction.response.send_message(tutorial_text, ephemeral=True)
+    ret = await modify(tutorial_text, interaction.user.id)
+    await interaction.response.send_message(ret, ephemeral=True)
 
 @client.tree.command()
 async def list_responses(interaction: discord.Interaction):
     """Lists all the responses you've made, and their you-specific ID. Protip: use this to get the id of responses you want to remove"""
-    async with dataframe_lock:
-        responses = get_messages_owned_by(interaction.user.name)
+    async with dataframe_reader.read as dataframe:
+        responses = await get_messages_owned_by(interaction.user.name, dataframe)
     
     retstr = "\n- ".join(str(i) + ": " + response["response"] + " when " + response["condition"] for i, response in enumerate(responses))
 
     await interaction.response.send_message(retstr, ephemeral=True)
+
+@client.tree.command(description="Sets Jennah's feelings towards you. Allowed values: " + ", ".join(i for i in columns))
+async def set_personality(interaction: discord.Interaction, personality: str):
+    ret = await amend(interaction.user.id, personality=personality)
+
+    if ret:
+        message = "Request granted, {nickname}"
+        message = await modify(message, interaction.user.id)
+        await interaction.response.send_message(message, ephemeral=True)
+
+    else:
+        message = "Could not do, {nickname}"
+        message = await modify(message, interaction.user.id)
+        await interaction.response.send_message(message, ephemeral=True)
 
 @client.tree.command()
 async def remove_response(interaction: discord.Interaction, responsenum: int):
     """Delete a response by index. Protip: use list_responses to figure out what this means."""
     global tree
 
-    async with dataframe_lock:
-        responses = get_messages_owned_by(interaction.user.name)
-
+    async with dataframe_reader.edit as dataframe:
+        responses = await get_messages_owned_by(interaction.user.name, dataframe)
+        
         try:
             for _ in range(responsenum):
                 next(responses)
@@ -314,8 +332,6 @@ async def remove_response(interaction: discord.Interaction, responsenum: int):
         await interaction.response.send_message("Condition removed :)")
 
         tree_obj = gen_tree_from_csv()
-
-        dataframe.to_csv(cf.RESPONSE_FILENAME)
     
     async with message_lock:
         tree = tree_obj

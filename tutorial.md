@@ -1,4 +1,4 @@
-Alrighty, tutorial time. 
+{greeting}. 
 
 The base element of the condition for a response is the Condition. The following exist:
 - **contains: "string"** e.g. **contains: "foo"** - note that the quotation marks are mandatory. I have not bothered to implement any form of escaping characters, so you can't have a " inside a string. Conditions are case-insensitive.  
