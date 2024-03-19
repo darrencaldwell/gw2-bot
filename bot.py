@@ -7,6 +7,8 @@ import asyncio
 # bot.py
 import os
 
+import random
+
 import discord
 from discord.ext import commands, tasks
 from discord.utils import get
@@ -22,6 +24,8 @@ from storage import LockingPandasRWer
 from personality import amend, modify, columns
 
 import pandas as pd
+
+import time
 
 from log import LogObject
 import weather as wth
@@ -42,12 +46,16 @@ CHANNEL_ID = 1166772628216893620
 ROLE_ID = 1168850068665794661
 GUILD_ID = 1099793030678069338
 WEATHER_CHANNEL_ID = 1199439405245550703
+VOICE_CHANNEL_ID = 1099793031139434496
 
 #OSCAR TESTING
 # CHANNEL_ID = 723899751732346964
 # ROLE_ID = 1180661716107931658
 # GUILD_ID = 723899751732346960
 # WEATHER_CHANNEL_ID = 723899751732346964
+# VOICE_CHANNEL_ID = 723899751732346965
+
+TEST_VOICE_ID = 723899751732346965
 
 GUILD = discord.Object(id=GUILD_ID)
 
@@ -164,6 +172,7 @@ class MyClient(discord.Client):
             await channel.send(response)
 
 
+
 class MyCog(commands.Cog):
     def __init__(self, client: discord.Client, channel, other_channel, role):
         self.client = client
@@ -174,6 +183,8 @@ class MyCog(commands.Cog):
         # self.my_task.start()
         self.adjust_probs.start()
         self.get_weather.start()
+        self.play_audio.start()
+
 
     def cog_unxload(self):
         # self.my_task.cancel()
@@ -191,8 +202,20 @@ class MyCog(commands.Cog):
 
     @tasks.loop(hours=1)
     async def reset_mut_record(self):
+        print(datetime.datetime.now().hour)
+        print(my_mut_record.reset_time)
         if datetime.datetime.now().hour == my_mut_record.reset_time:
             my_mut_record.has_been_used = False
+
+    @tasks.loop(minutes=1)
+    async def play_audio(self):
+        channel: discord.VoiceChannel = await self.client.fetch_channel(VOICE_CHANNEL_ID)
+
+        members = channel.members
+
+        if len(members) > 1:
+            await play_audio(channel)
+            await asyncio.sleep(200 + random.randint(0, 60*60*4)) 
     
     @tasks.loop(hours=1)
     async def adjust_probs(self):
@@ -202,6 +225,15 @@ class MyCog(commands.Cog):
     @tasks.loop(hours=1)
     async def pregenerate_graph(self):
         tree.get_graph()
+
+    # @tasks.loop(hours=1)
+    # async def message_connor(self):
+    #     channel = await self.client.fetch_channel(1099793030678069341)
+    #     user = await self.client.fetch_user(511552638853185536)
+
+    #     at_connor = user.mention
+
+    #     await channel.send(f"Hello {user.mention}! It's me, Queen Jennah. I would really like it if you killed Coathe. Thanks.")
 
     @tasks.loop(seconds=10)
     async def get_weather(self):
@@ -232,6 +264,31 @@ client = MyClient(intents=intents)
 
 with open("tutorial.md", "r") as f:
     tutorial_text =  f.read()
+
+async def play_audio(channel: discord.VoiceChannel, src: str | None = None):
+    vc = await channel.connect()
+
+    if src == None:
+        src = random.choice(os.listdir("audio/"))
+    
+    vc.play(
+        discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(
+            source = "audio/" + src)))
+
+    while vc.is_playing():
+        await asyncio.sleep(0.5)
+
+    await vc.disconnect() 
+
+# @client.tree.command()
+# async def test_audio(interaction: discord.Interaction):
+#     channel = await client.fetch_channel(TEST_VOICE_ID)
+
+#     print(type(channel))
+
+#     await interaction.response.send_message("Test complete")
+
+#     await play_audio(channel)
 
 @client.tree.command()
 async def new_response(interaction: discord.Interaction, response: str, condition: str):
@@ -294,7 +351,7 @@ async def list_responses(interaction: discord.Interaction):
 
     await interaction.response.send_message(retstr, ephemeral=True)
 
-@client.tree.command(description="Sets Jennah's feelings towards you. Allowed values: " + ", ".join(i for i in columns))
+@client.tree.command(description="Sets Jennah's feelings towards you. Allowed values: " + ", ".join(columns["personality"].all))
 async def set_personality(interaction: discord.Interaction, personality: str):
     ret = await amend(interaction.user.id, personality=personality)
 
@@ -335,20 +392,5 @@ async def remove_response(interaction: discord.Interaction, responsenum: int):
     
     async with message_lock:
         tree = tree_obj
-
-# @client.tree.command()
-# async def gen_graph(interaction: discord.Interaction):
-#     """Gives you the current response tree state"""
-
-#     try:
-#         file = discord.File("/tmp/out.jpeg")
-
-#         await interaction.response.send_message(file=file)
-    
-#     except:
-#         await interaction.response.send_message("FILE MISSING!1!!!!")
-
-# with LogObject("graph generation"):
-#     tree.get_graph()
 
 client.run(TOKEN)
